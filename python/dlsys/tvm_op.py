@@ -131,15 +131,54 @@ def make_matrix_mul_AB(shapeA, shapeB, tgt, tgt_host,
 
 def make_matrix_mul_ATB(shapeA, shapeB, tgt, tgt_host,
                     func_name, dtype="float32"):
-    return
+    # describe
+    assert shapeA[0] == shapeB[0]
+    k = tvm.reduce_axis((0, shapeA[0]), name="k")
+    A = tvm.placeholder(shapeA, dtype=dtype, name="A")
+    B = tvm.placeholder(shapeB, dtype=dtype, name="B")
+    C = tvm.compute((shapeA[1], shapeB[1]), lambda i, j: tvm.sum(A(k, i) * B(k, j), axis=k))
+    
+    # schedule
+    s = tvm.create_schedule(C.op)
+
+    # compile
+    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
+
+    return f
 
 def make_matrix_mul_ABT(shapeA, shapeB, tgt, tgt_host,
                     func_name, dtype="float32"):
-    return
+    # describe
+    assert shapeA[1] == shapeB[1]
+    k = tvm.reduce_axis((0, shapeA[1]), name="k")
+    A = tvm.placeholder(shapeA, dtype=dtype, name="A")
+    B = tvm.placeholder(shapeB, dtype=dtype, name="B")
+    C = tvm.compute((shapeA[0], shapeB[0]), lambda i, j: tvm.sum(A(i, k) * B(j, k), axis=k))
+    
+    # schedule
+    s = tvm.create_schedule(C.op)
+
+    # compile
+    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
+
+    return f
 
 def make_matrix_mul_ATBT(shapeA, shapeB, tgt, tgt_host,
                     func_name, dtype="float32"):
-    return
+    # describe
+    assert shapeA[0] == shapeB[1]
+    k = tvm.reduce_axis((0, shapeA[0]), name="k")
+    A = tvm.placeholder(shapeA, dtype=dtype, name="A")
+    B = tvm.placeholder(shapeB, dtype=dtype, name="B")
+    C = tvm.compute((shapeA[1], shapeB[0]), lambda i, j: tvm.sum(A(k, i) * B(j, k), axis=k))
+    
+    # schedule
+    s = tvm.create_schedule(C.op)
+
+    # compile
+    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
+
+    return f
 
 def make_matrix_mul(shapeA, transposeA, shapeB, transposeB, tgt, tgt_host,
                     func_name, dtype="float32"):
