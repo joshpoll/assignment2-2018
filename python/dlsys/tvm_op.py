@@ -24,6 +24,8 @@ def make_elemwise_add(shape, tgt, tgt_host, func_name, dtype="float32"):
 
 
 def make_elemwise_mul(shape, tgt, tgt_host, func_name, dtype="float32"):
+    """TODO: Your code here"""
+
     # describe
     A = tvm.placeholder(shape, dtype=dtype, name="A")
     B = tvm.placeholder(shape, dtype=dtype, name="B")
@@ -40,6 +42,8 @@ def make_elemwise_mul(shape, tgt, tgt_host, func_name, dtype="float32"):
 
 def make_elemwise_add_by_const(shape, const_k, tgt, tgt_host, func_name,
                                dtype="float32"):
+    """TODO: Your code here"""
+
     # describe
     A = tvm.placeholder(shape, dtype=dtype, name="A")
     B = tvm.compute(A.shape, lambda *i: A(*i) + const_k)
@@ -55,6 +59,8 @@ def make_elemwise_add_by_const(shape, const_k, tgt, tgt_host, func_name,
 
 def make_elemwise_mul_by_const(shape, const_k, tgt, tgt_host, func_name,
                             dtype="float32"):
+    """TODO: Your code here"""
+
     # describe
     A = tvm.placeholder(shape, dtype=dtype, name="A")
     B = tvm.compute(A.shape, lambda *i: A(*i) * const_k)
@@ -72,10 +78,38 @@ def make_relu(shape, tgt, tgt_host, func_name, dtype="float32"):
     """TODO: Your code here"""
     """Hint: use tvm.max, tvm.const(0, A.dtype)"""
 
+    # describe
+    A = tvm.placeholder(shape, dtype=dtype, name="A")
+    zero = tvm.const(0, A.dtype)
+    B = tvm.compute(A.shape, lambda *i: tvm.max(A(*i), zero))
+
+    # schedule
+    s = tvm.create_schedule(B.op)
+
+    # compile
+    f = tvm.build(s, [A, B], tgt, target_host=tgt_host, name=func_name)
+
+    return f
+
 
 def make_relu_gradient(shape, tgt, tgt_host, func_name, dtype="float32"):
     """TODO: Your code here"""
     """Hint: use tvm.select"""
+    # 1 if > 0 else 0
+
+    # describe
+    A = tvm.placeholder(shape, dtype=dtype, name="A")
+    B = tvm.placeholder(shape, dtype=dtype, name="B")
+    zero = tvm.const(0, A.dtype)
+    C = tvm.compute(A.shape, lambda *i: tvm.select(A(*i) > zero, B(*i), zero))
+
+    # schedule
+    s = tvm.create_schedule(C.op)
+
+    # compile
+    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
+
+    return f
 
 
 def make_matrix_mul(shapeA, transposeA, shapeB, transposeB, tgt, tgt_host,

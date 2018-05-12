@@ -43,7 +43,7 @@ def test_matrix_elementwise_mul():
     arr_x = tvm.nd.array(x, ctx=ctx)
     arr_y = tvm.nd.array(y, ctx=ctx)
     arr_z = tvm.nd.array(z, ctx=ctx)
-    elemwise_mul = tvm_op.make_elemwise_mul(shape, tgt, tgt_host, "elem_add")
+    elemwise_mul = tvm_op.make_elemwise_mul(shape, tgt, tgt_host, "elem_mul")
     elemwise_mul(arr_x, arr_y, arr_z)
     z = arr_z.asnumpy()
     np.testing.assert_allclose(x * y, z, rtol=1e-5)
