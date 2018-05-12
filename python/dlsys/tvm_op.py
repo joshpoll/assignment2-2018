@@ -112,6 +112,35 @@ def make_relu_gradient(shape, tgt, tgt_host, func_name, dtype="float32"):
     return f
 
 
+def make_matrix_mul_AB(shapeA, shapeB, tgt, tgt_host,
+                    func_name, dtype="float32"):
+    # describe
+    assert shapeA[1] == shapeB[0]
+    k = tvm.reduce_axis((0, shapeA[1]), name="k")
+    A = tvm.placeholder(shapeA, dtype=dtype, name="A")
+    B = tvm.placeholder(shapeB, dtype=dtype, name="B")
+    C = tvm.compute((shapeA[0], shapeB[1]), lambda i, j: tvm.sum(A(i, k) * B(k, j), axis=k))
+    
+    # schedule
+    s = tvm.create_schedule(C.op)
+
+    # compile
+    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
+
+    return f
+
+def make_matrix_mul_ATB(shapeA, shapeB, tgt, tgt_host,
+                    func_name, dtype="float32"):
+    return
+
+def make_matrix_mul_ABT(shapeA, shapeB, tgt, tgt_host,
+                    func_name, dtype="float32"):
+    return
+
+def make_matrix_mul_ATBT(shapeA, shapeB, tgt, tgt_host,
+                    func_name, dtype="float32"):
+    return
+
 def make_matrix_mul(shapeA, transposeA, shapeB, transposeB, tgt, tgt_host,
                     func_name, dtype="float32"):
     """TODO: Your code here"""
@@ -119,6 +148,19 @@ def make_matrix_mul(shapeA, transposeA, shapeB, transposeB, tgt, tgt_host,
     """Hint: treat 4 cases of transposeA, transposeB separately"""
     """Hint: for tvm schedule, use split, reorder, vectorize, parallel"""
     """Hint: debug tvm schedule using tvm.lower"""
+    
+    if (transposeA == False) and (transposeB == False):
+        return make_matrix_mul_AB(shapeA, shapeB, tgt, tgt_host,
+                    func_name, dtype)
+    elif (transposeA == True) and (transposeB == False):
+        return make_matrix_mul_ATB(shapeA, shapeB, tgt, tgt_host,
+                    func_name, dtype)
+    elif (transposeA == False) and (transposeB == True):
+        return make_matrix_mul_ABT(shapeA, shapeB, tgt, tgt_host,
+                    func_name, dtype)
+    else: # if (transposeA == True) and (transposeB == True):
+        return make_matrix_mul_ATBT(shapeA, shapeB, tgt, tgt_host,
+                    func_name, dtype)
 
 
 def make_conv2d(shapeX, shapeF, tgt, tgt_host, func_name, dtype="float32"):
