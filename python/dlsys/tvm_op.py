@@ -24,16 +24,49 @@ def make_elemwise_add(shape, tgt, tgt_host, func_name, dtype="float32"):
 
 
 def make_elemwise_mul(shape, tgt, tgt_host, func_name, dtype="float32"):
-    """TODO: Your code here"""
+    # describe
+    A = tvm.placeholder(shape, dtype=dtype, name="A")
+    B = tvm.placeholder(shape, dtype=dtype, name="B")
+    C = tvm.compute(A.shape, lambda *i: A(*i) * B(*i))
+
+    # schedule
+    s = tvm.create_schedule(C.op)
+
+    # compile
+    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
+    
+    return f
+
 
 def make_elemwise_add_by_const(shape, const_k, tgt, tgt_host, func_name,
                                dtype="float32"):
-    """TODO: Your code here"""
+    # describe
+    A = tvm.placeholder(shape, dtype=dtype, name="A")
+    B = tvm.compute(A.shape, lambda *i: A(*i) + const_k)
+
+    # schedule
+    s = tvm.create_schedule(B.op)
+
+    # compile
+    f = tvm.build(s, [A, B], tgt, target_host=tgt_host, name=func_name)
+
+    return f
 
 
 def make_elemwise_mul_by_const(shape, const_k, tgt, tgt_host, func_name,
                             dtype="float32"):
-    """TODO: Your code here"""
+    # describe
+    A = tvm.placeholder(shape, dtype=dtype, name="A")
+    B = tvm.compute(A.shape, lambda *i: A(*i) * const_k)
+
+    # schedule
+    s = tvm.create_schedule(B.op)
+
+    # compile
+    f = tvm.build(s, [A, B], tgt, target_host=tgt_host, name=func_name)
+
+    return f
+
 
 def make_relu(shape, tgt, tgt_host, func_name, dtype="float32"):
     """TODO: Your code here"""

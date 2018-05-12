@@ -4,6 +4,7 @@ from __future__ import absolute_import
 import numpy as np
 import tvm
 from . import tvm_op
+from typing import Tuple, List
 
 class Node(object):
     """Node in a computation graph."""
@@ -101,7 +102,7 @@ class Op(object):
         """
         raise NotImplementedError
 
-    def infer_shape(self, node, input_shapes):
+    def infer_shape(self, node, input_shapes: List[Tuple[int, ...]]) -> Tuple[int, ...]:
         """Given shapes of input nodes, compute shape of output node.
 
         Implementation note:
