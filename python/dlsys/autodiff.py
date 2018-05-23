@@ -457,9 +457,14 @@ class SoftmaxCrossEntropyOp(Op):
 
     def infer_shape(self, node, input_shapes):
         """TODO: Your code here"""
+        assert len(input_shapes) == 2
+        assert input_shapes[0] == input_shapes[1]
+        assert len(input_shapes[0]) == 2
+        return (1,)
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
         """TODO: Your code here"""
+        return tvm_op.make_matrix_softmax_cross_entropy(input_shapes[0], tgt, tgt_host, "cross_entropy")
 
 class SoftmaxOp(Op):
     def __call__(self, node_A):
@@ -479,9 +484,12 @@ class SoftmaxOp(Op):
 
     def infer_shape(self, node, input_shapes):
         """TODO: Your code here"""
+        assert len(input_shapes) == 1
+        return input_shapes[0]
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
         """TODO: Your code here"""
+        return tvm_op.make_matrix_softmax(input_shapes[0], tgt, tgt_host, "softmax")
 
 
 class ReluOp(Op):
@@ -499,9 +507,12 @@ class ReluOp(Op):
 
     def infer_shape(self, node, input_shapes):
         """TODO: Your code here"""
+        assert len(input_shapes) == 1
+        return input_shapes[0]
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
         """TODO: Your code here"""
+        return tvm_op.make_relu(input_shapes[0], tgt, tgt_host, "relu")
 
 
 class ReluGradientOp(Op):
@@ -520,9 +531,13 @@ class ReluGradientOp(Op):
 
     def infer_shape(self, node, input_shapes):
         """TODO: Your code here"""
+        assert len(input_shapes) == 2
+        assert input_shapes[0] == input_shapes[1]
+        return input_shapes[0]
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
         """TODO: Your code here"""
+        return tvm_op.make_relu_gradient(input_shapes[0], tgt, tgt_host, "relu_grad")
 
 # Create global singletons of operators.
 add_op = AddOp()
@@ -563,10 +578,10 @@ class Executor(object):
         else:
             assert False, "non-CPU context not yet supported"
         self.topo_order = find_topo_sort(self.eval_node_list)
-        self.node_to_shape_map = None
-        self.node_to_arr_map: List = None
-        self.node_to_compiled_func: List = None
-        self.feed_shapes = None
+        self.node_to_shape_map = {}
+        self.node_to_arr_map = {}
+        self.node_to_compiled_func = {}
+        self.feed_shapes = {}
 
     def infer_shape(self, feed_shapes):
         """Given shapes of feed_dict nodes, infer shape for all nodes in graph.
@@ -580,6 +595,18 @@ class Executor(object):
         feed_shapes: node->shapes mapping for feed_dict nodes.
         """
         """TODO: Your code here"""
+        # go through all nodes in topo order
+        for node in self.topo_order:
+            # if node is in existing shapes
+            if node in feed_shapes:
+                # add node and shape to map
+                self.node_to_shape_map[node] = feed_shapes[node]
+            else:
+                # infer node shape and add to map
+                input_shapes = [self.node_to_shape_map[node] for node in node.inputs]
+                self.node_to_shape_map[node] = node.op.infer_shape(node, input_shapes)
+        # print('shapes:', [f"{node.name}: {shape}" for node, shape in self.node_to_shape_map.items()])
+
 
     def memory_plan(self, feed_shapes):
         """Allocates tvm.nd.array for every node except feed_dict nodes.
@@ -595,6 +622,14 @@ class Executor(object):
         feed_shapes: node->shapes mapping for feed_dict nodes.
         """
         """TODO: Your code here"""
+        for node in self.topo_order:
+            if node in self.node_to_arr_map:
+                continue
+            nparr = np.ndarray(self.node_to_shape_map[node], dtype=np.float32)
+            self.node_to_arr_map[node] = tvm.nd.array(nparr, ctx=self.ctx)
+
+        # print('mem plan:', [f"{node.name}: {arr.shape}" for node, arr in self.node_to_arr_map.items()])
+
 
     def compile_funcs(self, feed_shapes):
         """Compile tvm ops to native code.
@@ -607,6 +642,9 @@ class Executor(object):
         feed_shapes: node->shapes mapping for feed_dict nodes.
         """
         """TODO: Your code here"""
+        for node in self.topo_order:
+            input_shapes = [self.node_to_shape_map[node] for node in node.inputs]
+            self.node_to_compiled_func[node] = node.op.compiled_func(node, input_shapes, self.tgt, self.tgt_host)
 
     def run(self, feed_dict, convert_to_numpy_ret_vals=False):
         """
@@ -646,12 +684,14 @@ class Executor(object):
 
         # Traverse graph in topo order and compute values for all nodes.
         for node in self.topo_order:
+            # print("computing:", node.name)
             if node in node_to_val_map:
                 # Skip placeholder nodes. Values already provided by feed_dict.
                 continue
             input_vals = [node_to_val_map[n] for n in node.inputs]
             node_val = self.node_to_arr_map[node]
             # node_val is modified in-place
+            # import pdb; pdb.set_trace()
             node.op.compute(
                 node, input_vals, node_val, self.node_to_compiled_func[node])
             node_to_val_map[node] = node_val
