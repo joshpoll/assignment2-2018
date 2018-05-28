@@ -111,94 +111,52 @@ def make_relu_gradient(shape, tgt, tgt_host, func_name, dtype="float32"):
 
     return f
 
-def matmul_AB_computation(shapeA, shapeB, dtype="float32"):
+def matmul_AB_computation(shapeA, shapeB, bn, dtype="float32"):
     # describe
     assert shapeA[1] == shapeB[0]
     k = tvm.reduce_axis((0, shapeA[1]), name="k")
     A = tvm.placeholder(shapeA, dtype=dtype, name="A")
     B = tvm.placeholder(shapeB, dtype=dtype, name="B")
-    MATMUL = tvm.compute((shapeA[0], shapeB[1]), lambda i, j: tvm.sum(A(i, k) * B(k, j), axis=k), name="MATMUL")
+    packedB = tvm.compute((shapeB[1] / bn, shapeB[0], bn), lambda x, y, z: B[y, x * bn + z], name="packedB")
+    MATMUL = tvm.compute((shapeA[0], shapeB[1]), lambda i, j: tvm.sum(A(i, k) * packedB(j / bn, k, j % bn), axis=k), name="MATMUL")
 
-    return A, B, MATMUL
+    return A, B, packedB, MATMUL
 
-def make_matrix_mul_AB(shapeA, shapeB, tgt, tgt_host,
-                    func_name, dtype="float32"):
-
-    A, B, C = matmul_AB_computation(shapeA, shapeB, dtype)
-    
-    # schedule
-    s = tvm.create_schedule(C.op)
-
-    # compile
-    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
-
-    return f
-
-def matmul_ATB_computation(shapeA, shapeB, dtype="float32"):
+def matmul_ATB_computation(shapeA, shapeB, bn, dtype="float32"):
     # describe
     assert shapeA[0] == shapeB[0]
     k = tvm.reduce_axis((0, shapeA[0]), name="k")
     A = tvm.placeholder(shapeA, dtype=dtype, name="A")
     B = tvm.placeholder(shapeB, dtype=dtype, name="B")
+    # packedB = tvm.compute((shapeB[1] / bn, shapeB[0], bn), lambda x, y, z: B[y, x * bn + z], name="packedB")
+    # MATMUL = tvm.compute((shapeA[1], shapeB[1]), lambda i, j: tvm.sum(A(k, i) * packedB(j / bn, k, j % bn), axis=k), name="MATMUL")
     MATMUL = tvm.compute((shapeA[1], shapeB[1]), lambda i, j: tvm.sum(A(k, i) * B(k, j), axis=k), name="MATMUL")
 
     return A, B, MATMUL
 
-def make_matrix_mul_ATB(shapeA, shapeB, tgt, tgt_host,
-                    func_name, dtype="float32"):
-    A, B, C = matmul_ATB_computation(shapeA, shapeB, dtype)
-    
-    # schedule
-    s = tvm.create_schedule(C.op)
-
-    # compile
-    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
-
-    return f
-
-def matmul_ABT_computation(shapeA, shapeB, dtype="float32"):
+def matmul_ABT_computation(shapeA, shapeB, bn, dtype="float32"):
     # describe
     assert shapeA[1] == shapeB[1]
     k = tvm.reduce_axis((0, shapeA[1]), name="k")
     A = tvm.placeholder(shapeA, dtype=dtype, name="A")
     B = tvm.placeholder(shapeB, dtype=dtype, name="B")
+    # packedB = tvm.compute((shapeB[1], shapeB[0] / bn, bn), lambda x, y, z: B[y * bn + z, x], name="packedB")
+    # MATMUL = tvm.compute((shapeA[0], shapeB[0]), lambda i, j: tvm.sum(A(i, k) * packedB(k, j / bn, j % bn), axis=k), name="MATMUL")
     MATMUL = tvm.compute((shapeA[0], shapeB[0]), lambda i, j: tvm.sum(A(i, k) * B(j, k), axis=k), name="MATMUL")
 
     return A, B, MATMUL
 
-def make_matrix_mul_ABT(shapeA, shapeB, tgt, tgt_host,
-                    func_name, dtype="float32"):
-    A, B, C = matmul_ABT_computation(shapeA, shapeB, dtype)
-    
-    # schedule
-    s = tvm.create_schedule(C.op)
-
-    # compile
-    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
-
-    return f
-
-def matmul_ATBT_computation(shapeA, shapeB, dtype="float32"):
+def matmul_ATBT_computation(shapeA, shapeB, bn, dtype="float32"):
     # describe
     assert shapeA[0] == shapeB[1]
     k = tvm.reduce_axis((0, shapeA[0]), name="k")
     A = tvm.placeholder(shapeA, dtype=dtype, name="A")
     B = tvm.placeholder(shapeB, dtype=dtype, name="B")
+    # packedB = tvm.compute((shapeB[1], shapeB[0] / bn, bn), lambda x, y, z: B[y * bn + z, x], name="packedB")
+    # MATMUL = tvm.compute((shapeA[1], shapeB[0]), lambda i, j: tvm.sum(A(k, i) * packedB(k, j / bn, j % bn), axis=k), name="MATMUL")
     MATMUL = tvm.compute((shapeA[1], shapeB[0]), lambda i, j: tvm.sum(A(k, i) * B(j, k), axis=k), name="MATMUL")
 
     return A, B, MATMUL
-
-def make_matrix_mul_ATBT(shapeA, shapeB, tgt, tgt_host,
-                    func_name, dtype="float32"):
-    A, B, C = matmul_ATBT_computation(shapeA, shapeB, dtype)
-    
-    # schedule
-    s = tvm.create_schedule(C.op)
-
-    # compile
-    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
-
-    return f
 
 def make_matrix_mul(shapeA, transposeA, shapeB, transposeB, tgt, tgt_host,
                     func_name, dtype="float32"):
@@ -207,19 +165,54 @@ def make_matrix_mul(shapeA, transposeA, shapeB, transposeB, tgt, tgt_host,
     """Hint: treat 4 cases of transposeA, transposeB separately"""
     """Hint: for tvm schedule, use split, reorder, vectorize, parallel"""
     """Hint: debug tvm schedule using tvm.lower"""
-    
-    if (transposeA == False) and (transposeB == False):
-        return make_matrix_mul_AB(shapeA, shapeB, tgt, tgt_host,
-                    func_name, dtype)
-    elif (transposeA == True) and (transposeB == False):
-        return make_matrix_mul_ATB(shapeA, shapeB, tgt, tgt_host,
-                    func_name, dtype)
-    elif (transposeA == False) and (transposeB == True):
-        return make_matrix_mul_ABT(shapeA, shapeB, tgt, tgt_host,
-                    func_name, dtype)
-    else: # if (transposeA == True) and (transposeB == True):
-        return make_matrix_mul_ATBT(shapeA, shapeB, tgt, tgt_host,
-                    func_name, dtype)
+    bn = 32
+    packedB = None
+
+    if transposeA is False and transposeB is False:
+        A, B, packedB, C = matmul_AB_computation(shapeA, shapeB, bn, dtype)
+    elif transposeA is True and transposeB is False:
+        A, B, C = matmul_ATB_computation(shapeA, shapeB, bn, dtype)
+    elif transposeA is False and transposeB is True:
+        A, B, C = matmul_ABT_computation(shapeA, shapeB, bn, dtype)
+    else: # transposeA is True and transposeB is True:
+        A, B, C = matmul_ATBT_computation(shapeA, shapeB, bn, dtype)
+
+    # schedule
+    s = tvm.create_schedule(C.op)
+
+    if transposeA is False and transposeB is False:
+        # allocate write cache
+        CC = s.cache_write(C, 'global')
+
+        ## TILE
+        xo, yo, xi, yi = s[C].tile(C.op.axis[0], C.op.axis[1], bn, bn)
+
+        # write cache is computed at yo
+        s[CC].compute_at(s[C], yo)
+
+        # new inner axes
+        xc, yc = s[CC].op.axis
+
+        k, = s[CC].op.reduce_axis
+        ko, ki = s[CC].split(k, factor=4)
+
+        s[CC].reorder(ko, xc, ki, yc)
+        s[CC].unroll(ki)
+        s[CC].vectorize(yc)
+
+        ## PARALLELIZE
+        s[C].parallel(xo)
+
+        ## PACK
+        x, y, z = s[packedB].op.axis
+        s[packedB].vectorize(z)
+        s[packedB].parallel(x)
+    # TODO: optimize other cases
+
+    # compile
+    f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
+
+    return f
 
 
 def make_conv2d(shapeX, shapeF, tgt, tgt_host, func_name, dtype="float32"):
@@ -227,50 +220,42 @@ def make_conv2d(shapeX, shapeF, tgt, tgt_host, func_name, dtype="float32"):
     """Hint: use tvm.reduce_axis, tvm.sum"""
     """Hint: go by conv2d definition. Treat stride=1, padding=0 case only."""
     """For a challenge, treat the general case for stride and padding."""
+    # adapted from http://docs.tvmlang.org/tutorials/optimize/opt_conv_cuda.html
+
     stride = 1
     padding = 0
 
+    # extract dimensions
+    batch, inChannel, H, W = shapeX
+    filter_outChannel, filter_inChannel, filter_H, filter_W = shapeF
+    assert inChannel == filter_inChannel
+
+    # output shape is (batch, filter_outChannel, out_H, out_W)
+    assert (H + 2 * padding - filter_H) % stride == 0
+    assert (W + 2 * padding - filter_W) % stride == 0
+    out_H = (H + 2 * padding - filter_H) // stride + 1
+    out_W = (W + 2 * padding - filter_W) // stride + 1
+    
     X = tvm.placeholder(shapeX, dtype=dtype, name="X")
     F = tvm.placeholder(shapeF, dtype=dtype, name="F")
 
-    # im2col
+    # pad input
+    # assumed pad = 0 so not implemented
 
+    # reduction vars
+    rc = tvm.reduce_axis((0, inChannel), name='rc')
+    ry = tvm.reduce_axis((0, filter_H), name='ry')
+    rx = tvm.reduce_axis((0, filter_W), name='rx')
 
-    def im2col(X, filter_H, filter_W, padding, stride):
-        N, C, H, W = X.shape
-        out_H = H - filter_H + 1
-        out_W = W - filter_W + 1
-
-        y_row_size = C * filter_H * filter_W
-        y_col_size = out_H * out_W
-        y_shape = (N, y_row_size, y_col_size)
-
-        # TODO: fix this
-        for batch_index in range(N):
-            for col_index in range(y_col_size):
-                in_y = col_index / out_W
-                in_x = col_index % out_W
-                for c in range(0, C):
-                    for y in range(in_y, in_y + filter_H):
-                        for x in range(in_x, in_x + filter_W):
-                            tvm.select(x < 0 or x >= W or y < 0 or y >= H, 0, X[batch_index, c, y, x])
-        return Y
-
-    assert(shapeX[1] == shapeF[1])
-    N, C, H, W = shapeX
-    filter_outChannel, filter_inChannel, filter_H, filter_W = shapeF
-
-    out_H = H - filter_H + 1
-    out_W = W - filter_W + 1
-
-    im2col_matrix = im2col(X, filter_H, filter_W, padding, stride)
-    filter_matrix = tvm.compute((filter_outChannel, -1), topi.reshape(F, (filter_outChannel, -1)))
-    # TODO: call this matrix mul
-    # describe
-    assert filter_matrix.shape[1] == im2col_matrix.shape[0]
-    k = tvm.reduce_axis((0, filter_matrix.shape[1]), name="k")
-    MATMUL = tvm.compute((filter_matrix.shape[0], im2col_matrix.shape[1]), lambda i, j: tvm.sum(filter_matrix(i, k) * im2col_matrix(k, j), axis=k), name="MATMUL")
-    OUT = tvm.compute((N, filter_outChannel, out_H, out_W), topi.reshape(MATMUL, (N, filter_outChannel, out_H, out_W)))
+    # compute
+    OUT = tvm.compute(
+        (batch, filter_outChannel, out_H, out_W),
+        lambda nn, ff, yy, xx: tvm.sum(
+            X[nn, rc, yy * stride + ry, xx * stride + rx] * F[ff, rc, ry, rx],
+            axis=[ry, rx, rc]
+        ),
+        name="OUT"
+    )
 
     # schedule
     s = tvm.create_schedule(OUT.op)
